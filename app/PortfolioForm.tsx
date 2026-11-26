@@ -21,6 +21,11 @@ import {
   type Attachments,
   type FormData,
 } from "../lib/form/state";
+import { polish } from "../lib/ai/client";
+import type { PolishKind, PolishRequest } from "../lib/ai/prompts";
+import { ACCEPT, convertFiles } from "../lib/files/convert";
+
+type AiCtx = PolishRequest["context"];
 
 const STRATEGY_GROUPS: { area: string; keys: StrategyKey[] }[] = [
   { area: "수업 운영", keys: ["orientation", "teamwork", "motivation"] },
@@ -49,6 +54,34 @@ export default function PortfolioForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cfg = TEMPLATES[templateId];
+  const aiCtx: AiCtx = {
+    templateTitle: cfg.title,
+    courseName: data.courseName,
+    department: data.department,
+    purpose: data.purpose,
+  };
+  const [weeksBusy, setWeeksBusy] = useState(false);
+  const [weeksUndo, setWeeksUndo] = useState<FormData["weeks"] | null>(null);
+  const [weeksError, setWeeksError] = useState<string | null>(null);
+  const polishWeeks = async () => {
+    const filled = data.weeks.some((w) => w.professor.trim() || w.student.trim());
+    if (!filled) return setWeeksError("주차표에 메모를 먼저 적어주세요.");
+    setWeeksBusy(true);
+    setWeeksError(null);
+    try {
+      const r = await polish({ kind: "weeks", label: "주차별 세부 활동", memo: JSON.stringify(data.weeks), context: aiCtx });
+      const next = data.weeks.map((w, i) => ({
+        professor: w.professor.trim() ? r.weeks?.[i]?.professor ?? w.professor : "",
+        student: w.student.trim() ? r.weeks?.[i]?.student ?? w.student : "",
+      }));
+      setWeeksUndo(data.weeks);
+      up("weeks", next);
+    } catch (e) {
+      setWeeksError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWeeksBusy(false);
+    }
+  };
 
   // restore draft once
   useEffect(() => {
@@ -274,6 +307,7 @@ export default function PortfolioForm() {
           <LongField
             label="수업목적"
             hint="학습자중심수업의 수업목적"
+            ai={{ kind: "purpose", ctx: aiCtx }}
             value={data.purpose}
             onChange={(v) => up("purpose", v)}
           />
@@ -287,6 +321,7 @@ export default function PortfolioForm() {
                   key={k}
                   label={cfg.strategyLabels[k]}
                   rows={2}
+                  ai={{ kind: "strategy", ctx: aiCtx }}
                   value={data.strategies[k] ?? ""}
                   onChange={(v) => upIn("strategies", { [k]: v })}
                 />
@@ -350,7 +385,7 @@ export default function PortfolioForm() {
           </div>
 
           <h3>2. 주차별 세부 활동</h3>
-          <p className="muted small">{cfg.weeksHint}을 주차별로 적어주세요.</p>
+          <p className="muted small">{cfg.weeksHint}을 주차별로 메모해 두고 &quot;AI로 다듬기&quot;를 누르면 문장으로 정리됩니다.</p>
           <div className="weeks">
             <div className="weeks-head">
               <span>주차</span>
@@ -393,9 +428,26 @@ export default function PortfolioForm() {
                 </button>
               </div>
             ))}
-            <button className="btn ghost small" onClick={() => up("weeks", [...data.weeks, { professor: "", student: "" }])}>
-              + 주차 추가
-            </button>
+            <div className="row">
+              <button className="btn ghost small" onClick={() => up("weeks", [...data.weeks, { professor: "", student: "" }])}>
+                + 주차 추가
+              </button>
+              <button className="btn ai small" onClick={polishWeeks} disabled={weeksBusy}>
+                {weeksBusy ? "다듬는 중…" : "✨ 주차표 AI로 다듬기"}
+              </button>
+              {weeksUndo && (
+                <button
+                  className="btn ghost small"
+                  onClick={() => {
+                    up("weeks", weeksUndo);
+                    setWeeksUndo(null);
+                  }}
+                >
+                  되돌리기
+                </button>
+              )}
+              {weeksError && <span className="error-text">{weeksError}</span>}
+            </div>
           </div>
 
           {(Object.keys(cfg.attachments) as AttachmentKey[]).map((k, i) => (
@@ -455,6 +507,7 @@ export default function PortfolioForm() {
               <LongField
                 label="현장연계 사항"
                 hint="현장 전문가 참여 역할 및 현장연계에 대한 주요 사항"
+                ai={{ kind: "industry", ctx: aiCtx }}
                 value={data.industry.details}
                 onChange={(v) => upIn("industry", { details: v })}
               />
@@ -470,6 +523,7 @@ export default function PortfolioForm() {
               key={k}
               label={label}
               rows={4}
+              ai={{ kind: "reflection", ctx: aiCtx }}
               value={data.reflection[k] ?? ""}
               onChange={(v) => upIn("reflection", { [k]: v })}
             />
@@ -500,14 +554,89 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function LongField(props: { label: string; hint?: string; value: string; rows?: number; onChange: (v: string) => void }) {
+function LongField(props: {
+  label: string;
+  hint?: string;
+  value: string;
+  rows?: number;
+  onChange: (v: string) => void;
+  ai?: { kind: PolishKind; ctx: AiCtx };
+}) {
+  const [busy, setBusy] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [undo, setUndo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!props.ai) return;
+    if (!props.value.trim()) return setError("메모를 먼저 적어주세요.");
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await polish({ kind: props.ai.kind, label: props.label, memo: props.value, context: props.ai.ctx });
+      setSuggestion(r.text ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="field">
       <div className="label">
         {props.label}
         {props.hint && <span className="hint">{props.hint}</span>}
+        {props.ai && (
+          <span className="label-actions">
+            {undo !== null && (
+              <button
+                className="link"
+                onClick={() => {
+                  props.onChange(undo);
+                  setUndo(null);
+                }}
+              >
+                메모로 되돌리기
+              </button>
+            )}
+            <button className="btn ai small" onClick={run} disabled={busy}>
+              {busy ? "다듬는 중…" : "✨ AI로 다듬기"}
+            </button>
+          </span>
+        )}
       </div>
-      <textarea rows={props.rows ?? 3} value={props.value} onChange={(e) => props.onChange(e.target.value)} />
+      <textarea
+        rows={props.rows ?? 3}
+        value={props.value}
+        placeholder={props.ai ? "메모나 개요만 적어도 됩니다" : undefined}
+        onChange={(e) => props.onChange(e.target.value)}
+      />
+      {error && <div className="error-text">{error}</div>}
+      {suggestion !== null && (
+        <div className="suggestion">
+          <div className="suggestion-title">AI 제안</div>
+          <div className="suggestion-text">{suggestion}</div>
+          <div className="row">
+            <button
+              className="btn primary small"
+              onClick={() => {
+                setUndo(props.value);
+                props.onChange(suggestion);
+                setSuggestion(null);
+              }}
+            >
+              적용
+            </button>
+            <button className="btn ghost small" onClick={run} disabled={busy}>
+              다시 생성
+            </button>
+            <button className="btn ghost small" onClick={() => setSuggestion(null)}>
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -549,15 +678,20 @@ function AttachmentBox(props: {
   const urls = useMemo(() => props.items.map((i) => URL.createObjectURL(i.blob)), [props.items]);
   useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)), [urls]);
 
-  const add = (list: FileList | null) => {
-    if (!list) return;
-    const imgs = Array.from(list).filter((f) => /^image\/(png|jpeg|gif|bmp)$/.test(f.type));
-    const skipped = list.length - imgs.length;
-    if (skipped) window.alert(`이미지(png, jpg)만 넣을 수 있어요. PDF는 다음 단계에서 지원됩니다. (${skipped}개 제외)`);
-    props.onChange([
-      ...props.items,
-      ...imgs.map((f) => ({ id: crypto.randomUUID(), name: f.name, type: f.type, blob: f as Blob })),
-    ]);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const add = async (list: FileList | null) => {
+    if (!list || !list.length) return;
+    const files = Array.from(list);
+    setProgress("변환 준비 중");
+    try {
+      const r = await convertFiles(files, setProgress);
+      setSkipped(r.skipped);
+      props.onChange([...props.items, ...r.images.map((f) => ({ id: crypto.randomUUID(), ...f }))]);
+    } finally {
+      setProgress(null);
+      if (input.current) input.current.value = "";
+    }
   };
   const move = (i: number, d: -1 | 1) => {
     const next = [...props.items];
@@ -585,9 +719,10 @@ function AttachmentBox(props: {
           add(e.dataTransfer.files);
         }}
       >
-        파일을 끌어다 놓거나 눌러서 선택하세요 (png, jpg)
-        <input ref={input} type="file" accept="image/png,image/jpeg" multiple hidden onChange={(e) => add(e.target.files)} />
+        {progress ?? "파일을 끌어다 놓거나 눌러서 선택하세요 (PDF, png, jpg)"}
+        <input ref={input} type="file" accept={ACCEPT} multiple hidden onChange={(e) => add(e.target.files)} />
       </div>
+      {skipped.length > 0 && <div className="error-text">넣지 못한 파일: {skipped.join(", ")}</div>}
       {props.items.length > 0 && (
         <ul className="thumbs">
           {props.items.map((it, i) => (

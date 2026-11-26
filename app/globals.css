@@ -95,3 +95,13 @@ input.short { width: 200px !important; }
 .thumb-actions { display: flex; gap: 4px; justify-content: flex-end; }
 
 .bottom-actions { display: flex; justify-content: flex-end; padding-bottom: 40px; }
+
+.btn.ai { background: #f3efff; border-color: #d9ccff; color: #5b21b6; }
+.btn.ai:hover { background: #ebe4ff; }
+.btn.ai:disabled { opacity: .6; cursor: progress; }
+.label-actions { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
+.link { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; font-size: 12px; font-weight: 400; }
+.error-text { color: var(--danger); font-size: 13px; margin-top: 4px; }
+.suggestion { margin-top: 8px; border: 1px solid #d9ccff; background: #faf8ff; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.suggestion-title { font-size: 12px; font-weight: 700; color: #5b21b6; }
+.suggestion-text { white-space: pre-wrap; font-size: 14px; }

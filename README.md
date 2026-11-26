@@ -8,3 +8,14 @@
 - `docs/template-analysis.md` 서식 분석 결과
 
 시험 파일 생성: `npm install && npx tsx scripts/fill-samples.ts` → `samples/out/`
+
+## 실행
+
+```bash
+npm install
+cp .env.example .env.local   # GEMINI_API_KEY 입력
+npm run dev
+```
+
+환경변수: `GEMINI_API_KEY`(필수, AI 다듬기), `GEMINI_MODEL`(선택), `APP_ACCESS_CODE`(선택, 설정 시 AI 기능에 접근 코드 필요).
+첨부 PDF는 브라우저에서 페이지별 JPEG로 변환되고, 큰 사진은 긴 변 2000px로 줄여 넣는다. hwpx 조립도 브라우저에서 한다.
