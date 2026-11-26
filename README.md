@@ -19,3 +19,8 @@ npm run dev
 
 환경변수: `GEMINI_API_KEY`(필수, AI 다듬기), `GEMINI_MODEL`(선택), `APP_ACCESS_CODE`(선택, 설정 시 AI 기능에 접근 코드 필요).
 첨부 PDF는 브라우저에서 페이지별 JPEG로 변환되고, 큰 사진은 긴 변 2000px로 줄여 넣는다. hwpx 조립도 브라우저에서 한다.
+
+## 배포 (Vercel)
+
+`main`에 push하면 Vercel 프로젝트 `portfolio-generator`(팀 GNU-INNO)가 자동 배포한다.
+환경변수는 Vercel 프로젝트 설정 > Environment Variables에서 관리하며, 바꾼 뒤에는 재배포해야 적용된다.
