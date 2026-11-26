@@ -336,7 +336,7 @@ export default function PortfolioForm() {
         <section className="card draft-card">
           <h2>✨ AI 초안 도우미</h2>
           <p className="muted small">
-            교과목 정보와 수업 메모를 적고 버튼을 누르면, {cfg.id} 우수 사례의 문체를 참고해 Ⅰ~Ⅲ단계의 빈 서술 칸에 초안을 채워 드려요. 이미 쓴 칸은 건드리지 않습니다.
+            교과목 정보와 수업 메모를 적고 버튼을 누르면, {cfg.id} 작성 사례의 문체를 참고해 Ⅰ~Ⅲ단계의 빈 서술 칸에 초안을 채워 드려요. 이미 쓴 칸은 건드리지 않습니다.
           </p>
           <div className="grid2">
             <Field label="교과목명">
@@ -782,7 +782,7 @@ function LongField(props: {
           <span className="label-actions">
             {props.example && (
               <button className="link" onClick={() => setShowExample((v) => !v)}>
-                {showExample ? "예시 닫기" : "우수 사례 보기"}
+                {showExample ? "예시 닫기" : "작성 사례 보기"}
               </button>
             )}
             {undo !== null && (
@@ -812,7 +812,7 @@ function LongField(props: {
       />
       {showExample && props.example && (
         <div className="example">
-          <div className="example-title">우수 사례 예시 · 그대로 쓰지 말고 우리 수업에 맞게 참고하세요</div>
+          <div className="example-title">작성 사례 예시 · 그대로 쓰지 말고 우리 수업에 맞게 참고하세요</div>
           <div className="example-text">{props.example}</div>
         </div>
       )}
