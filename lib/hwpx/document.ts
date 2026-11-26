@@ -508,6 +508,42 @@ export class HwpxDocument {
     p.parentNode?.removeChild(p);
   }
 
+  /** A top-level paragraph with no text and no objects (tables, pictures, section/page controls). */
+  isBlank(p: El): boolean {
+    if (textOf(p).trim()) return false;
+    for (const n of ["tbl", "pic", "secPr", "ctrl", "checkBtn", "rect", "line", "container"]) {
+      if (descendants(p, n).length) return false;
+    }
+    return true;
+  }
+
+  /** Collapse runs of blank top-level paragraphs to at most `keep` (template padding lines). */
+  collapseBlankParagraphs(keep = 1): number {
+    let removed = 0;
+    let run = 0;
+    for (const p of this.bodyParagraphs()) {
+      if (this.isBlank(p)) {
+        run++;
+        if (run > keep) {
+          this.removeParagraph(p);
+          removed++;
+        }
+      } else run = 0;
+    }
+    return removed;
+  }
+
+  /** Start the paragraph on a new page (and drop blank lines directly before it). */
+  setPageBreakBefore(p: El): void {
+    p.setAttribute("pageBreak", "1");
+    let prev = p.previousSibling;
+    while (prev && (prev.nodeType !== 1 || this.isBlank(prev as El))) {
+      const before = prev.previousSibling;
+      if (prev.nodeType === 1) this.removeParagraph(prev as El);
+      prev = before;
+    }
+  }
+
   // ---------- output ----------
 
   async save(): Promise<Uint8Array> {

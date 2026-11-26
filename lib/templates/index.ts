@@ -265,6 +265,10 @@ export async function fillPortfolio(
     if ((opts.removeGuides ?? true) && images.length) guides.forEach((g) => doc.removeParagraph(g));
   }
 
+  // remove the template's padding lines; Ⅲ always starts on a new page instead
+  doc.collapseBlankParagraphs(1);
+  doc.setPageBreakBefore(doc.bodyParagraphs()[doc.findHeading("Ⅲ. 수업성찰")]);
+
   // Ⅲ. 수업성찰
   const refl = doc.tableWith("교육의 성과");
   for (const [k, label] of Object.entries(cfg.reflectionLabels) as [ReflectionKey, string][]) {
