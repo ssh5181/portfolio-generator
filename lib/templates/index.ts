@@ -221,7 +221,8 @@ export async function fillPortfolio(
   set("소속", data.applicant.affiliation);
   doc.setCellText(doc.findCell("e-mail)", { table: main, match: "startsWith" }), `e-mail) ${data.applicant.email}`);
   doc.setCellText(doc.findCell("Tel)", { table: main, match: "startsWith" }), `Tel) ${data.applicant.phone}`);
-  doc.setChecks(doc.findCell("※ 개인정보수집활용", { table: main, match: "startsWith" }), [data.consent ? "동의함" : "동의하지 않음"]);
+  // only mark consent when given; an unanswered form leaves both boxes empty
+  if (data.consent) doc.setChecks(doc.findCell("※ 개인정보수집활용", { table: main, match: "startsWith" }), ["동의함"]);
 
   // Ⅱ. 수업결과물
   const intro = doc.tableWith(cfg.intro.title);

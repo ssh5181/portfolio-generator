@@ -61,7 +61,7 @@ const data: PortfolioData = {
 };
 
 for (const cfg of Object.values(TEMPLATES)) {
-  const bytes = await fillPortfolio(readFileSync(join("templates", cfg.file)), cfg, data);
+  const bytes = await fillPortfolio(readFileSync(join("public/templates", cfg.file)), cfg, data);
   const out = join(outDir, `sample-${cfg.id}.hwpx`);
   writeFileSync(out, bytes);
   console.log("wrote", out, bytes.length);
