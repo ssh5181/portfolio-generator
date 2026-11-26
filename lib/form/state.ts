@@ -17,6 +17,8 @@ export interface Draft {
   templateId: TemplateId;
   data: FormData;
   savedAt?: string;
+  /** current wizard step (0-2) */
+  step?: number;
 }
 
 export const emptyForm = (): FormData => ({

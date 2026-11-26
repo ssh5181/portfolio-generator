@@ -47,6 +47,7 @@ function toggle<T>(list: T[], v: T): T[] {
 
 export default function PortfolioForm() {
   const [templateId, setTemplateId] = useState<TemplateId>("PBL");
+  const [step, setStep] = useState(0);
   const [data, setData] = useState<FormData>(emptyForm);
   const [files, setFiles] = useState<Attachments>(emptyAttachments);
   const [loaded, setLoaded] = useState(false);
@@ -90,6 +91,7 @@ export default function PortfolioForm() {
       setTemplateId(d.templateId);
       setData(d.data);
       setSavedAt(d.savedAt ?? null);
+      if (typeof d.step === "number" && d.step >= 0 && d.step <= 2) setStep(d.step);
     }
     loadAttachments().then((a) => {
       setFiles(a);
@@ -102,10 +104,10 @@ export default function PortfolioForm() {
     if (!loaded) return;
     const t = setTimeout(() => {
       const at = new Date().toISOString();
-      if (saveDraft({ templateId, data, savedAt: at })) setSavedAt(at);
+      if (saveDraft({ templateId, data, savedAt: at, step })) setSavedAt(at);
     }, 600);
     return () => clearTimeout(t);
-  }, [templateId, data, loaded]);
+  }, [templateId, data, loaded, step]);
 
   useEffect(() => {
     if (loaded) saveAttachments(files);
@@ -165,6 +167,48 @@ export default function PortfolioForm() {
     }
   };
 
+  const filled = (v: unknown) => (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v.trim() !== "" : !!v);
+  const progress: [number, number][] = [
+    (() => {
+      const items = [
+        data.courseType,
+        data.grades,
+        data.department,
+        data.courseName,
+        data.credits,
+        data.enrollment,
+        data.purpose,
+        ...STRATEGY_KEYS.map((k) => data.strategies[k] ?? ""),
+        data.applicant.names,
+        data.applicant.affiliation,
+        data.applicant.email,
+        data.applicant.phone,
+        data.consent,
+      ];
+      return [items.filter(filled).length, items.length];
+    })(),
+    (() => {
+      const items: unknown[] = [
+        data.intro.title,
+        data.intro.source,
+        data.intro.developedAt,
+        data.weeks.some((w) => w.professor.trim() || w.student.trim()),
+        ...(Object.keys(cfg.attachments) as AttachmentKey[]).map((k) => files[k]),
+      ];
+      if (cfg.industry) items.push(data.industry.company, data.industry.expertName, data.industry.roles, data.industry.details);
+      return [items.filter(filled).length, items.length];
+    })(),
+    (() => {
+      const items = Object.keys(cfg.reflectionLabels).map((k) => data.reflection[k as ReflectionKey] ?? "");
+      return [items.filter(filled).length, items.length];
+    })(),
+  ];
+  const STEPS = ["Ⅰ. 수업운영", "Ⅱ. 수업결과물", "Ⅲ. 수업성찰"];
+  const goStep = (n: number) => {
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="page">
       <header className="topbar">
@@ -184,17 +228,34 @@ export default function PortfolioForm() {
             </button>
           </div>
         </div>
-        <nav className="tabs">
-          <a href="#s0">서식 선택</a>
-          <a href="#s1">Ⅰ. 수업운영</a>
-          <a href="#s2">Ⅱ. 수업결과물</a>
-          <a href="#s3">Ⅲ. 수업성찰</a>
+        <nav className="stepper" aria-label="작성 단계">
+          {STEPS.map((label, i) => {
+            const [done, total] = progress[i];
+            return (
+              <button
+                key={label}
+                className={`step ${step === i ? "current" : ""} ${done === total ? "complete" : ""}`}
+                aria-current={step === i ? "step" : undefined}
+                onClick={() => goStep(i)}
+              >
+                <span className="step-no">{done === total ? "✓" : i + 1}</span>
+                <span className="step-text">
+                  <span className="step-label">{label}</span>
+                  <span className="step-count">
+                    {done}/{total} 작성
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </nav>
       </header>
 
       {error && <div className="alert">내려받기 실패: {error}</div>}
 
       <main className="content">
+        {step === 0 && (
+        <>
         <section id="s0" className="card">
           <h2>서식 선택</h2>
           <div className="template-grid">
@@ -356,7 +417,10 @@ export default function PortfolioForm() {
             개인정보수집활용에 동의합니다 (필수)
           </label>
         </section>
+        </>
+        )}
 
+        {step === 1 && (
         <section id="s2" className="card">
           <h2>Ⅱ. 수업결과물</h2>
 
@@ -514,7 +578,9 @@ export default function PortfolioForm() {
             </>
           )}
         </section>
+        )}
 
+        {step === 2 && (
         <section id="s3" className="card">
           <h2>Ⅲ. 수업성찰</h2>
           <p className="muted small">교과목 전체가 아니라 본 학습자중심수업에 대해 적어주세요.</p>
@@ -529,11 +595,24 @@ export default function PortfolioForm() {
             />
           ))}
         </section>
+        )}
 
         <div className="bottom-actions">
-          <button className="btn primary" onClick={download} disabled={busy}>
-            {busy ? "만드는 중…" : "한글(hwpx) 내려받기"}
-          </button>
+          {step > 0 && (
+            <button className="btn ghost" onClick={() => goStep(step - 1)}>
+              ← 이전: {STEPS[step - 1]}
+            </button>
+          )}
+          <span className="spacer" />
+          {step < STEPS.length - 1 ? (
+            <button className="btn primary" onClick={() => goStep(step + 1)}>
+              다음: {STEPS[step + 1]} →
+            </button>
+          ) : (
+            <button className="btn primary" onClick={download} disabled={busy}>
+              {busy ? "만드는 중…" : "한글(hwpx) 내려받기"}
+            </button>
+          )}
         </div>
       </main>
     </div>
