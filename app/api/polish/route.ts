@@ -84,7 +84,7 @@ function tidy(s: string): string {
   return s
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/^#+\s*/gm, "")
-    .replace(/^[*•]\s+/gm, "- ")
+    .replace(/^[*•\-]\s+/gm, "· ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

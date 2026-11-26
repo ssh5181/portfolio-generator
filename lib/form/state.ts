@@ -11,6 +11,8 @@ export interface AttachmentItem {
 
 export type FormData = Omit<PortfolioData, "attachments" | "industry"> & {
   industry: NonNullable<PortfolioData["industry"]>;
+  /** free memo for the AI draft helper (not written to the hwpx) */
+  overview?: string;
 };
 
 export interface Draft {

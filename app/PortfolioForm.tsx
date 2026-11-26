@@ -21,7 +21,8 @@ import {
   type Attachments,
   type FormData,
 } from "../lib/form/state";
-import { polish } from "../lib/ai/client";
+import { draft, polish } from "../lib/ai/client";
+import { EXAMPLES } from "../lib/examples";
 import type { PolishKind, PolishRequest } from "../lib/ai/prompts";
 import { ACCEPT, convertFiles } from "../lib/files/convert";
 
@@ -60,6 +61,66 @@ export default function PortfolioForm() {
     courseName: data.courseName,
     department: data.department,
     purpose: data.purpose,
+  };
+  const ex = EXAMPLES[templateId];
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftMsg, setDraftMsg] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftUndo, setDraftUndo] = useState<FormData | null>(null);
+  const runDraft = async () => {
+    setDraftBusy(true);
+    setDraftError(null);
+    setDraftMsg(null);
+    try {
+      const empty = (v?: string) => !v || !v.trim();
+      const want: string[] = [];
+      if (empty(data.purpose)) want.push("purpose");
+      if (STRATEGY_KEYS.some((k) => empty(data.strategies[k]))) want.push("strategies");
+      if (empty(data.intro.title) || empty(data.intro.source)) want.push("intro");
+      if (data.weeks.some((w) => empty(w.professor) || empty(w.student))) want.push("weeks");
+      if (Object.keys(cfg.reflectionLabels).some((k) => empty(data.reflection[k as ReflectionKey]))) want.push("reflection");
+      if (cfg.industry && empty(data.industry.details)) want.push("industryDetails");
+      if (!want.length) {
+        setDraftMsg("비어 있는 서술 칸이 없어요.");
+        return;
+      }
+      const { draft: d } = await draft({
+        templateId,
+        courseName: data.courseName,
+        department: data.department,
+        overview: data.overview ?? "",
+        purpose: data.purpose,
+        weekCount: data.weeks.length,
+        want,
+      });
+      let n = 0;
+      const pick = (cur: string | undefined, next: unknown) => {
+        if (!empty(cur) || typeof next !== "string" || !next.trim()) return cur ?? "";
+        n++;
+        return next.trim();
+      };
+      const next: FormData = {
+        ...data,
+        purpose: pick(data.purpose, d.purpose),
+        strategies: Object.fromEntries(STRATEGY_KEYS.map((k) => [k, pick(data.strategies[k], d.strategies?.[k])])),
+        intro: { ...data.intro, title: pick(data.intro.title, d.intro?.title), source: pick(data.intro.source, d.intro?.source) },
+        weeks: data.weeks.map((w, i) => ({
+          professor: pick(w.professor, d.weeks?.[i]?.professor),
+          student: pick(w.student, d.weeks?.[i]?.student),
+        })),
+        reflection: Object.fromEntries(
+          Object.keys(cfg.reflectionLabels).map((k) => [k, pick(data.reflection[k as ReflectionKey], d.reflection?.[k])]),
+        ),
+        industry: { ...data.industry, details: cfg.industry ? pick(data.industry.details, d.industryDetails) : data.industry.details },
+      };
+      setDraftUndo(data);
+      setData(next);
+      setDraftMsg(`빈 칸 ${n}곳에 초안을 채웠어요. 단계별로 확인하며 고쳐 주세요.`);
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDraftBusy(false);
+    }
   };
   const [weeksBusy, setWeeksBusy] = useState(false);
   const [weeksUndo, setWeeksUndo] = useState<FormData["weeks"] | null>(null);
@@ -272,6 +333,48 @@ export default function PortfolioForm() {
           </div>
         </section>
 
+        <section className="card draft-card">
+          <h2>✨ AI 초안 도우미</h2>
+          <p className="muted small">
+            교과목 정보와 수업 메모를 적고 버튼을 누르면, {cfg.id} 우수 사례의 문체를 참고해 Ⅰ~Ⅲ단계의 빈 서술 칸에 초안을 채워 드려요. 이미 쓴 칸은 건드리지 않습니다.
+          </p>
+          <div className="grid2">
+            <Field label="교과목명">
+              <input value={data.courseName} placeholder={`예) ${ex.source.course}`} onChange={(e) => up("courseName", e.target.value)} />
+            </Field>
+            <Field label="개설학과(부)(전공)">
+              <input value={data.department} placeholder={`예) ${ex.source.department}`} onChange={(e) => up("department", e.target.value)} />
+            </Field>
+          </div>
+          <Field label="수업 메모" hint="선택 · 주요 활동, 팀 구성, 사용 도구, 평가 방식, 느낀 점 등 아는 만큼">
+            <textarea
+              rows={4}
+              value={data.overview ?? ""}
+              placeholder={"예) 4~5명 팀, 지역 문제 시나리오 2개로 PBL 진행\n매주 성찰일지, 중간·기말 발표, 동료평가\n학생들이 근거 찾기를 어려워했음"}
+              onChange={(e) => up("overview", e.target.value)}
+            />
+          </Field>
+          <div className="row">
+            <button className="btn ai" onClick={runDraft} disabled={draftBusy}>
+              {draftBusy ? "초안 만드는 중… (20~40초)" : "✨ 빈 칸 AI 초안 채우기"}
+            </button>
+            {draftUndo && (
+              <button
+                className="btn ghost small"
+                onClick={() => {
+                  setData(draftUndo);
+                  setDraftUndo(null);
+                  setDraftMsg("초안을 채우기 전으로 되돌렸어요.");
+                }}
+              >
+                되돌리기
+              </button>
+            )}
+            {draftMsg && <span className="ok-text">{draftMsg}</span>}
+            {draftError && <span className="error-text">{draftError}</span>}
+          </div>
+        </section>
+
         <section id="s1" className="card">
           <h2>Ⅰ. 수업운영</h2>
 
@@ -369,6 +472,7 @@ export default function PortfolioForm() {
             label="수업목적"
             hint="학습자중심수업의 수업목적"
             ai={{ kind: "purpose", ctx: aiCtx }}
+            example={ex.purpose}
             value={data.purpose}
             onChange={(v) => up("purpose", v)}
           />
@@ -383,6 +487,7 @@ export default function PortfolioForm() {
                   label={cfg.strategyLabels[k]}
                   rows={2}
                   ai={{ kind: "strategy", ctx: aiCtx }}
+                  example={ex.strategies[k]}
                   value={data.strategies[k] ?? ""}
                   onChange={(v) => upIn("strategies", { [k]: v })}
                 />
@@ -427,10 +532,10 @@ export default function PortfolioForm() {
           <h3>{cfg.intro.heading}</h3>
           <div className="grid2">
             <Field label={cfg.intro.title}>
-              <input value={data.intro.title} onChange={(e) => upIn("intro", { title: e.target.value })} />
+              <input value={data.intro.title} placeholder={`예) ${ex.intro.title}`} onChange={(e) => upIn("intro", { title: e.target.value })} />
             </Field>
             <Field label={cfg.intro.source}>
-              <input value={data.intro.source} onChange={(e) => upIn("intro", { source: e.target.value })} />
+              <input value={data.intro.source} placeholder={`예) ${ex.intro.source}`} onChange={(e) => upIn("intro", { source: e.target.value })} />
             </Field>
             <Field label={cfg.intro.developedAt}>
               <input
@@ -463,6 +568,7 @@ export default function PortfolioForm() {
                 <textarea
                   rows={2}
                   aria-label={`${i + 1}주차 교수자`}
+                  placeholder={ex.weeks[i] ? `예) ${ex.weeks[i].professor}` : undefined}
                   value={w.professor}
                   onChange={(e) =>
                     up(
@@ -474,6 +580,7 @@ export default function PortfolioForm() {
                 <textarea
                   rows={2}
                   aria-label={`${i + 1}주차 학습자`}
+                  placeholder={ex.weeks[i] ? `예) ${ex.weeks[i].student}` : undefined}
                   value={w.student}
                   onChange={(e) =>
                     up(
@@ -572,6 +679,7 @@ export default function PortfolioForm() {
                 label="현장연계 사항"
                 hint="현장 전문가 참여 역할 및 현장연계에 대한 주요 사항"
                 ai={{ kind: "industry", ctx: aiCtx }}
+                example={ex.industryDetails}
                 value={data.industry.details}
                 onChange={(v) => upIn("industry", { details: v })}
               />
@@ -590,6 +698,7 @@ export default function PortfolioForm() {
               label={label}
               rows={4}
               ai={{ kind: "reflection", ctx: aiCtx }}
+              example={ex.reflection[k]}
               value={data.reflection[k] ?? ""}
               onChange={(v) => upIn("reflection", { [k]: v })}
             />
@@ -640,7 +749,10 @@ function LongField(props: {
   rows?: number;
   onChange: (v: string) => void;
   ai?: { kind: PolishKind; ctx: AiCtx };
+  /** text from an excellent sample, shown as a grey hint */
+  example?: string;
 }) {
+  const [showExample, setShowExample] = useState(false);
   const [busy, setBusy] = useState(false);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [undo, setUndo] = useState<string | null>(null);
@@ -668,6 +780,11 @@ function LongField(props: {
         {props.hint && <span className="hint">{props.hint}</span>}
         {props.ai && (
           <span className="label-actions">
+            {props.example && (
+              <button className="link" onClick={() => setShowExample((v) => !v)}>
+                {showExample ? "예시 닫기" : "우수 사례 보기"}
+              </button>
+            )}
             {undo !== null && (
               <button
                 className="link"
@@ -688,9 +805,17 @@ function LongField(props: {
       <textarea
         rows={props.rows ?? 3}
         value={props.value}
-        placeholder={props.ai ? "메모나 개요만 적어도 됩니다" : undefined}
+        placeholder={
+          props.example ? `예시)\n${props.example}` : props.ai ? "메모나 개요만 적어도 됩니다" : undefined
+        }
         onChange={(e) => props.onChange(e.target.value)}
       />
+      {showExample && props.example && (
+        <div className="example">
+          <div className="example-title">우수 사례 예시 · 그대로 쓰지 말고 우리 수업에 맞게 참고하세요</div>
+          <div className="example-text">{props.example}</div>
+        </div>
+      )}
       {error && <div className="error-text">{error}</div>}
       {suggestion !== null && (
         <div className="suggestion">

@@ -121,3 +121,10 @@ input.short { width: 200px !important; }
 .suggestion { margin-top: 8px; border: 1px solid #d9ccff; background: #faf8ff; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .suggestion-title { font-size: 12px; font-weight: 700; color: #5b21b6; }
 .suggestion-text { white-space: pre-wrap; font-size: 14px; }
+
+.draft-card { border-color: #d9ccff; background: linear-gradient(180deg, #faf8ff, #fff 60%); }
+.ok-text { color: #15803d; font-size: 13px; }
+.example { margin-top: 8px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 10px 12px; }
+.example-title { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.example-text { white-space: pre-wrap; font-size: 13px; color: #475569; }
+textarea::placeholder, input::placeholder { color: #a3acb9; }
